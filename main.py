@@ -1,7 +1,7 @@
 import os
 import platform
 import subprocess
-from colorama import init, Fore, Back
+from colorama import Style, init, Fore, Back
 import readchar
 from time import sleep
 from dataclasses import dataclass
@@ -56,14 +56,21 @@ def clear_screen():
 
 def draw_picker(contents: list[str], cursor_index: int, current_path):
     clear_screen()
+    content_first_half = contents[: len(contents) // 2]
+    content_second_half = contents[len(contents) // 2 :]
+    cursor_content = contents[cursor_index]
     print(f"Path actual : {current_path}")
-    for index, content in enumerate(contents):
-        full_path = os.path.join(current_path, content)
-        is_dir = os.path.isdir(full_path)
-        color = Fore.RED if is_dir else Fore.GREEN
-        prefix = Back.WHITE if index == cursor_index else ""
-        icon = "📁" if is_dir else "📄"
-        print(f"{prefix}{icon}{color} {content}")
+    for index, content in enumerate(zip(content_first_half, content_second_half)):
+        line = ""
+        for element in content:
+            full_path = os.path.join(current_path, element)
+            is_dir = os.path.isdir(full_path)
+            color = Fore.RED if is_dir else Fore.GREEN
+            prefix = Back.WHITE if element == cursor_content else ""
+            icon = "📁" if is_dir else "📄"
+            result = f"{prefix}{icon}{color} {element} {Style.RESET_ALL}"
+            line += result + " " * (50 - len(result.removeprefix(prefix)))
+        print(line)
 
 
 def main():
@@ -81,6 +88,7 @@ def main():
         if state == States.dir_picker:
             clear_screen()
             contents = list_dir(current_path)
+
             draw_picker(contents, cursor_index, current_path)
             try:
                 key = readchar.readkey()
