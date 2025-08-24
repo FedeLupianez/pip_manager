@@ -16,6 +16,7 @@ class States:
     dir_picker = 0
     venv_creator = 1
     library_installer = 2
+    create_dir = 3
 
 
 def config_path() -> str:
@@ -60,7 +61,7 @@ def draw_picker(contents: list[str], cursor_index: int, current_path):
     content_second_half = contents[len(contents) // 2 :]
     cursor_content = contents[cursor_index]
     print(f"Path actual : {current_path}")
-    for index, content in enumerate(zip(content_first_half, content_second_half)):
+    for content in zip(content_first_half, content_second_half):
         line = ""
         for element in content:
             full_path = os.path.join(current_path, element)
@@ -71,6 +72,18 @@ def draw_picker(contents: list[str], cursor_index: int, current_path):
             result = f"{prefix}{icon}{color} {element} {Style.RESET_ALL}"
             line += result + " " * (50 - len(result.removeprefix(prefix)))
         print(line)
+
+
+def install_libs(libs: list[str]):
+    for lib in libs:
+        pip_path = ".venv/scripts/pip" if actual_system == windows else ".venv/bin/pip"
+        result = run_command(f"{pip_path} install {lib}")
+        if result.returncode == 0:
+            print(Fore.GREEN + f"✅ Librería '{lib}' instalada.")
+            sleep(1)
+        else:
+            print(Fore.RED + f"❌ Error: {result.stderr}")
+            input("Presioná Enter para continuar...")
 
 
 def main():
@@ -108,6 +121,8 @@ def main():
                     state = States.library_installer
                 elif key == " ":
                     state = States.venv_creator
+                elif key.lower() == "m":
+                    state = States.create_dir
                 elif key.lower() == "q":
                     is_running = False
                     exit(0)
@@ -121,7 +136,7 @@ def main():
             sleep(1)
             state = States.dir_picker
         elif state == States.library_installer:
-            print("📦 Estado: Instalador de librerías")
+            print("📦 Instalación de librerías")
             if not os.path.exists(".venv"):
                 print(Fore.RED + "⚠️ No existe .venv. Creando...")
                 run_command("python -m venv .venv")
@@ -153,28 +168,36 @@ def main():
             elif not os.path.exists("requirements.txt"):
                 print(Fore.RED + "❌ No se encontró requirements.txt.")
                 try:
+                    print(
+                        "(Podés instalar varias librerias separando sus nombres por una coma)"
+                    )
                     op = (
-                        input("¿Querés instalar una sola librería? (si/no): ")
+                        input("¿Querés instalar una o varias librerias?  (si/no): ")
                         .strip()
                         .lower()
                     )
                     if "si" in op:
-                        lib = input("Nombre de la librería: ").strip()
-                        pip_path = (
-                            ".venv/scripts/pip"
-                            if actual_system == windows
-                            else ".venv/bin/pip"
-                        )
-                        result = run_command(f"{pip_path} install {lib}")
-                        if result.returncode == 0:
-                            print(f"✅ Librería '{lib}' instalada.")
-                        else:
-                            print(f"❌ Error: {result.stderr}")
-                            input("Presioná Enter para continuar...")
+                        lib = input("Nombre de la librería/s: ").strip()
+                        libraries = [lib] if "," not in lib else lib.split(",")
+                        install_libs(libraries)
+                        state = States.dir_picker
                 except Exception as e:
                     print(f"Error en input(): {e}")
                     input("Presioná Enter para continuar...")
                     state = States.dir_picker
+
+        elif state == States.create_dir:
+            clear_screen()
+            print("📦 Estado: Creación de carpetas")
+            try:
+                name = input("Nombre de la carpeta: ").strip()
+                os.mkdir(name)
+                print(Fore.GREEN + f"✅ Carpeta '{name}' creada.")
+            except Exception as e:
+                print(Fore.RED + f"Error en input(): {e}")
+                input("Presioná Enter para continuar...")
+            finally:
+                state = States.dir_picker
 
 
 if __name__ == "__main__":
