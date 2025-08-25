@@ -3,6 +3,7 @@ import platform
 import subprocess
 from colorama import Style, init, Fore, Back
 import readchar
+from shutil import rmtree
 from time import sleep
 from dataclasses import dataclass
 
@@ -80,7 +81,7 @@ def draw_picker(contents: list[str], cursor_index: int, current_path):
     if len(contents) > 26:
         middle_index = len(contents) // 2
         content_first_half = contents[:middle_index]
-        content_second_half = contents[middle_index:]
+        content_second_half = contents[middle_index + 1 :]
         for content in zip(content_first_half, content_second_half):
             line = ""
             for element in content:
@@ -127,35 +128,37 @@ def main():
             contents = list_dir(current_path)
 
             draw_picker(contents, cursor_index, current_path)
-            try:
-                key = readchar.readkey()
-                if key == readchar.key.UP:
-                    cursor_index = max(cursor_index - 1, 0)
-                elif key == readchar.key.DOWN:
-                    cursor_index = min(cursor_index + 1, len(contents) - 1)
-                elif key == readchar.key.ENTER or key == readchar.key.RIGHT:
-                    selected = contents[cursor_index]
-                    if selected == "..":
-                        current_path = os.path.dirname(current_path.rstrip("/")) + "/"
-                    elif os.path.isdir(selected):
-                        current_path = os.path.join(current_path, selected)
-                    os.chdir(current_path)
-                    cursor_index = 0
-                elif key == readchar.key.BACKSPACE or key == readchar.key.LEFT:
-                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
-                    os.chdir(current_path)
-                    cursor_index = 0
-                elif key.lower() == "l":
-                    state = States.library_installer
-                elif key == " ":
-                    state = States.venv_creator
-                elif key.lower() == "m":
-                    state = States.create_dir
-                elif key.lower() == "q":
-                    is_running = False
-                    exit(0)
-            except Exception:
-                draw_picker(contents, cursor_index, current_path)
+            state_changes = {
+                "l": States.library_installer,
+                " ": States.venv_creator,
+                "m": States.create_dir,
+            }
+            key = readchar.readkey()
+            if key in state_changes:
+                state = state_changes[key]
+                continue
+
+            if key == readchar.key.UP:
+                cursor_index = max(cursor_index - 1, 0)
+            elif key == readchar.key.DOWN:
+                cursor_index = min(cursor_index + 1, len(contents) - 1)
+
+            elif key == readchar.key.ENTER or key == readchar.key.RIGHT:
+                selected = contents[cursor_index]
+                if selected != "..":
+                    state = States.choise_action
+                    continue
+                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                os.chdir(current_path)
+
+            elif key == readchar.key.BACKSPACE or key == readchar.key.LEFT:
+                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                os.chdir(current_path)
+                cursor_index = 0
+
+            elif key.lower() == "q":
+                is_running = False
+                exit(0)
 
         elif state == States.venv_creator:
             print("⚙️ Creando entorno virtual...")
@@ -224,6 +227,54 @@ def main():
                 input("Presioná Enter para continuar...")
             finally:
                 state = States.dir_picker
+
+        elif state == States.choise_action:
+            actual_element = contents[cursor_index]
+            full_path = os.path.join(current_path, actual_element)
+            line = get_format_line(full_path, "", actual_element)
+            option_index = 0
+            options = [
+                "Abrir",
+                "Crear entorno",
+                "Instalar libreria en entorno",
+                "Borrar",
+                "Salir",
+            ]
+
+            if not (os.path.isdir(full_path)):
+                state = States.dir_picker
+                continue
+
+            states_to_switch = [
+                States.dir_picker,
+                States.venv_creator,
+                States.library_installer,
+                States.dir_picker,
+                States.dir_picker,
+            ]
+            while True:
+                clear_screen()
+                print(line)
+                for index, option in enumerate(options):
+                    if index == option_index:
+                        option = Fore.RED + option + Style.RESET_ALL
+                    print(option)
+                key = readchar.readkey()
+                if key == readchar.key.UP:
+                    option_index = max(option_index - 1, 0)
+                elif key == readchar.key.DOWN:
+                    option_index = min(option_index + 1, len(options) - 1)
+
+                elif key == readchar.key.ENTER:
+                    if option_index == 0 or option_index <= 2:
+                        current_path += f"/{actual_element}"
+                        os.chdir(current_path)
+                    if option_index == 3:
+                        rmtree(full_path)
+
+                    cursor_index = 0
+                    state = states_to_switch[option_index]
+                    break
 
 
 if __name__ == "__main__":
