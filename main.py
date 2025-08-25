@@ -31,7 +31,7 @@ def config_path() -> str:
 
 def list_dir(path: str) -> list:
     result = os.listdir(path)
-    result.insert(0, "..")
+    result.append("..")
     return sorted(result)
 
 
@@ -45,33 +45,44 @@ def run_command(command: str) -> subprocess.CompletedProcess:
 
 
 def config_policy() -> None:
-    if actual_system == windows:
-        result = run_command("Set-ExecutionPolicy unrestricted")
-        if result.returncode != 0:
-            print(result.stderr)
+    result = run_command("Set-ExecutionPolicy unrestricted")
+    if result.returncode != 0:
+        print(result.stderr)
 
 
 def clear_screen():
     os.system("cls" if actual_system == windows else "clear")
 
 
+def get_format_line(full_path: str, cursor_content: str, content: str):
+    is_dir = os.path.isdir(full_path)
+    color = Fore.RED if is_dir else Fore.GREEN
+    prefix = Back.WHITE if content == cursor_content else ""
+    icon = "📁" if is_dir else "📄"
+    result = f"{prefix}{icon}{color} {content} {Style.RESET_ALL}"
+    line = result + " " * (50 - len(result.removeprefix(prefix)))
+    return line
+
+
 def draw_picker(contents: list[str], cursor_index: int, current_path):
     clear_screen()
-    content_first_half = contents[: len(contents) // 2]
-    content_second_half = contents[len(contents) // 2 :]
     cursor_content = contents[cursor_index]
     print(f"Path actual : {current_path}")
-    for content in zip(content_first_half, content_second_half):
-        line = ""
-        for element in content:
-            full_path = os.path.join(current_path, element)
-            is_dir = os.path.isdir(full_path)
-            color = Fore.RED if is_dir else Fore.GREEN
-            prefix = Back.WHITE if element == cursor_content else ""
-            icon = "📁" if is_dir else "📄"
-            result = f"{prefix}{icon}{color} {element} {Style.RESET_ALL}"
-            line += result + " " * (50 - len(result.removeprefix(prefix)))
-        print(line)
+    if len(contents) > 26:
+        content_first_half = contents[: len(contents) // 2]
+        content_second_half = contents[len(contents) // 2 :]
+        for content in zip(content_first_half, content_second_half):
+            line = ""
+            for element in content:
+                full_path = os.path.join(current_path, element)
+                result = get_format_line(full_path, cursor_content, element)
+                line += result
+            print(line)
+        return
+    for element in contents:
+        full_path = os.path.join(current_path, element)
+        result = get_format_line(full_path, cursor_content, element)
+        print(result)
 
 
 def install_libs(libs: list[str]):
@@ -91,7 +102,10 @@ def main():
     contents: list = list_dir(current_path)
     cursor_index: int = 0
     state: int = States.dir_picker
-    config_policy()
+
+    if actual_system == windows:
+        config_policy()
+
     is_running = True
     print(
         "📁 Navegá con ↑ ↓ - Enter para entrar, L para instalar libs, Space para crear venv"
