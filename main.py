@@ -109,14 +109,18 @@ def main():
                     cursor_index = max(cursor_index - 1, 0)
                 elif key == readchar.key.DOWN:
                     cursor_index = min(cursor_index + 1, len(contents) - 1)
-                elif key == readchar.key.ENTER:
+                elif key == readchar.key.ENTER or key == readchar.key.RIGHT:
                     selected = contents[cursor_index]
                     if selected == "..":
                         current_path = os.path.dirname(current_path.rstrip("/")) + "/"
                     elif os.path.isdir(selected):
                         current_path = os.path.join(current_path, selected)
-                        os.chdir(current_path)
-                        cursor_index = 0
+                    os.chdir(current_path)
+                    cursor_index = 0
+                elif key == readchar.key.BACKSPACE or key == readchar.key.LEFT:
+                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                    os.chdir(current_path)
+                    cursor_index = 0
                 elif key.lower() == "l":
                     state = States.library_installer
                 elif key == " ":
@@ -135,37 +139,35 @@ def main():
             print(Fore.GREEN + "✅ Entorno creado.")
             sleep(1)
             state = States.dir_picker
+
         elif state == States.library_installer:
             print("📦 Instalación de librerías")
             if not os.path.exists(".venv"):
                 print(Fore.RED + "⚠️ No existe .venv. Creando...")
-                run_command("python -m venv .venv")
-                print(Fore.GREEN + "✅ Entorno creado.")
                 sleep(1)
-                if os.path.exists("requirements.txt"):
-                    print("📦 Instalando librerías desde requirements.txt")
-                    op = (
-                        input(
-                            "Instalar las librerías desde requirements.txt? (si/no): "
-                        )
-                        .strip()
-                        .lower()
+                state = States.venv_creator
+                continue
+
+            if os.path.exists("requirements.txt"):
+                print("📦 Instalando librerías desde requirements.txt")
+                op = (
+                    input("Instalar las librerías desde requirements.txt? (si/no): ")
+                    .strip()
+                    .lower()
+                )
+                if "si" in op:
+                    pip_path = (
+                        ".venv/scripts/pip"
+                        if actual_system == windows
+                        else ".venv/bin/pip"
                     )
-                    if "si" in op:
-                        pip_path = (
-                            ".venv/scripts/pip"
-                            if actual_system == windows
-                            else ".venv/bin/pip"
-                        )
-                        result = run_command(f"{pip_path} install -r requirements.txt")
-                        if result.returncode == 0:
-                            print(Fore.GREEN + "✅ Librerías instaladas correctamente.")
-                        else:
-                            print(Fore.RED + f"❌ Error: {result.stderr}")
-                            input("Presioná Enter para continuar...")
-                else:
-                    state = States.dir_picker
-            elif not os.path.exists("requirements.txt"):
+                    result = run_command(f"{pip_path} install -r requirements.txt")
+                    if result.returncode == 0:
+                        print(Fore.GREEN + "✅ Librerías instaladas correctamente.")
+                    else:
+                        print(Fore.RED + f"❌ Error: {result.stderr}")
+                        input("Presioná Enter para continuar...")
+            else:
                 print(Fore.RED + "❌ No se encontró requirements.txt.")
                 try:
                     print(
@@ -180,10 +182,10 @@ def main():
                         lib = input("Nombre de la librería/s: ").strip()
                         libraries = [lib] if "," not in lib else lib.split(",")
                         install_libs(libraries)
-                        state = States.dir_picker
                 except Exception as e:
                     print(f"Error en input(): {e}")
                     input("Presioná Enter para continuar...")
+                finally:
                     state = States.dir_picker
 
         elif state == States.create_dir:
