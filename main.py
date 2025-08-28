@@ -7,11 +7,14 @@ from shutil import rmtree
 from time import sleep
 from dataclasses import dataclass
 
-init(autoreset=True)
+init(
+    autoreset=True
+)  # Config de colorama para iniciarlo y que cuando termine se reseteen los colores
 windows = "Windows"
-actual_system = platform.system()
+actual_system = platform.system()  # Obtengo el system actual
 
 
+# Estados en los que puede estar el bucle principal
 @dataclass
 class States:
     dir_picker = 0
@@ -21,23 +24,15 @@ class States:
     choise_action = 4
 
 
-def config_path() -> str:
-    user = os.path.expanduser("~")
-    if actual_system == windows:
-        result = f"C://Users//{user}//Desktop"
-    else:
-        result = "/home/fede/"
-        os.chdir(result)
-    return result
-
-
 def list_dir(path: str) -> list:
+    """devuelve una lista con todos los contenidos de una carpeta"""
     result = os.listdir(path)
     result.append("..")
     return sorted(result)
 
 
 def run_command(command: str) -> subprocess.CompletedProcess:
+    """Ejecuta un comando dependiendo del sistema operativo"""
     if actual_system == windows:
         return subprocess.run(
             ["powershell", "-Command", command], capture_output=True, text=True
@@ -47,12 +42,14 @@ def run_command(command: str) -> subprocess.CompletedProcess:
 
 
 def config_policy() -> None:
+    """Configura la política de ejecucion para windows"""
     result = run_command("Set-ExecutionPolicy unrestricted")
     if result.returncode != 0:
         print(result.stderr)
 
 
 def clear_screen():
+    """Borra la pantalla con el comando especifico de windows o linux""" ""
     os.system("cls" if actual_system == windows else "clear")
 
 
@@ -65,6 +62,7 @@ def print_success(message: str):
 
 
 def get_format_line(full_path: str, cursor_content: str, content: str):
+    """Retorna la linea formateada de un element dependiendo de qué sea este"""
     is_dir = os.path.isdir(full_path)
     color = Fore.RED if is_dir else Fore.GREEN
     prefix = Back.WHITE if content == cursor_content else ""
@@ -75,10 +73,12 @@ def get_format_line(full_path: str, cursor_content: str, content: str):
 
 
 def draw_picker(contents: list[str], cursor_index: int, current_path):
+    """Dibuja la pantalla de navegacion"""
     clear_screen()
     cursor_content = contents[cursor_index]
     print(f"Path actual : {current_path}")
-    if len(contents) > 26:
+    # Si hay mas de 25 elementos, los dibuja en dos columnas
+    if len(contents) >= 26:
         middle_index = len(contents) // 2
         content_first_half = contents[:middle_index]
         content_second_half = contents[middle_index + 1 :]
@@ -109,7 +109,9 @@ def install_libs(libs: list[str]):
 
 
 def main():
-    current_path: str = config_path()
+    user: str = os.path.expanduser("~")
+    current_path = user
+    os.chdir(current_path)
     contents: list = list_dir(current_path)
     cursor_index: int = 0
     state: int = States.dir_picker
@@ -144,12 +146,12 @@ def main():
                 cursor_index = min(cursor_index + 1, len(contents) - 1)
 
             elif key == readchar.key.ENTER or key == readchar.key.RIGHT:
-                selected = contents[cursor_index]
-                if selected != "..":
+                if contents[cursor_index] != "..":
                     state = States.choise_action
                     continue
                 current_path = os.path.dirname(current_path.rstrip("/")) + "/"
                 os.chdir(current_path)
+                cursor_index = 0
 
             elif key == readchar.key.BACKSPACE or key == readchar.key.LEFT:
                 current_path = os.path.dirname(current_path.rstrip("/")) + "/"
@@ -196,24 +198,19 @@ def main():
                         input("Presioná Enter para continuar...")
             else:
                 print_error("❌ No se encontró requirements.txt.")
-                try:
-                    print(
-                        "(Podés instalar varias librerias separando sus nombres por una coma)"
-                    )
-                    op = (
-                        input("¿Querés instalar una o varias librerias?  (si/no): ")
-                        .strip()
-                        .lower()
-                    )
-                    if "si" in op:
-                        lib = input("Nombre de la librería/s: ").strip()
-                        libraries = [lib] if "," not in lib else lib.split(",")
-                        install_libs(libraries)
-                except Exception as e:
-                    print_error(f"Error en input(): {e}")
-                    input("Presioná Enter para continuar...")
-                finally:
-                    state = States.dir_picker
+                print(
+                    "(Podés instalar varias librerias separando sus nombres por una coma)"
+                )
+                op = (
+                    input("¿Querés instalar una o varias librerias?  (si/no): ")
+                    .strip()
+                    .lower()
+                )
+                if "si" in op:
+                    lib = input("Nombre de la librería/s: ").strip()
+                    libraries = [lib] if "," not in lib else lib.split(",")
+                    install_libs(libraries)
+                state = States.dir_picker
 
         elif state == States.create_dir:
             clear_screen()
@@ -229,6 +226,7 @@ def main():
                 state = States.dir_picker
 
         elif state == States.choise_action:
+            # Estado para elegir que hacer en una carpeta
             actual_element = contents[cursor_index]
             full_path = os.path.join(current_path, actual_element)
             line = get_format_line(full_path, "", actual_element)
@@ -238,6 +236,7 @@ def main():
                 "Crear entorno",
                 "Instalar libreria en entorno",
                 "Borrar",
+                "Cambiar nombre",
                 "Salir",
             ]
 
@@ -245,13 +244,16 @@ def main():
                 state = States.dir_picker
                 continue
 
+            # Estados para elegir que hacer en una carpeta
             states_to_switch = [
                 States.dir_picker,
                 States.venv_creator,
                 States.library_installer,
                 States.dir_picker,
                 States.dir_picker,
+                States.dir_picker,
             ]
+            # Bucle del sub_menu
             while True:
                 clear_screen()
                 print(line)
@@ -259,6 +261,7 @@ def main():
                     if index == option_index:
                         option = Fore.RED + option + Style.RESET_ALL
                     print(option)
+
                 key = readchar.readkey()
                 if key == readchar.key.UP:
                     option_index = max(option_index - 1, 0)
@@ -271,6 +274,9 @@ def main():
                         os.chdir(current_path)
                     if option_index == 3:
                         rmtree(full_path)
+                    if option_index == 4:
+                        new_name = input("Nuevo nombre : ").strip()
+                        os.rename(full_path, new_name)
 
                     cursor_index = 0
                     state = states_to_switch[option_index]
