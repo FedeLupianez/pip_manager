@@ -1,27 +1,18 @@
 import os
-import platform
 import subprocess
-from colorama import Style, init, Fore, Back
 import readchar
 from shutil import rmtree
 from time import sleep
-from dataclasses import dataclass
-
-init(
-    autoreset=True
-)  # Config de colorama para iniciarlo y que cuando termine se reseteen los colores
-windows = "Windows"
-actual_system = platform.system()  # Obtengo el system actual
-
-
-# Estados en los que puede estar el bucle principal
-@dataclass
-class States:
-    dir_picker = 0
-    venv_creator = 1
-    library_installer = 2
-    create_dir = 3
-    choise_action = 4
+from constants import States, Path, actual_os, windows
+from visuals import (
+    get_format_line,
+    get_option_format,
+    print_success,
+    print_error,
+    clear_screen,
+    draw_picker,
+    title,
+)
 
 
 def list_dir(path: str) -> list:
@@ -33,7 +24,7 @@ def list_dir(path: str) -> list:
 
 def run_command(command: str) -> subprocess.CompletedProcess:
     """Ejecuta un comando dependiendo del sistema operativo"""
-    if actual_system == windows:
+    if actual_os == windows:
         return subprocess.run(
             ["powershell", "-Command", command], capture_output=True, text=True
         )
@@ -48,58 +39,10 @@ def config_policy() -> None:
         print(result.stderr)
 
 
-def clear_screen():
-    """Borra la pantalla con el comando especifico de windows o linux""" ""
-    os.system("cls" if actual_system == windows else "clear")
-
-
-def print_error(message: str):
-    print(Fore.RED + message + Style.RESET_ALL)
-
-
-def print_success(message: str):
-    print(Fore.GREEN + message + Style.RESET_ALL)
-
-
-def get_format_line(full_path: str, cursor_content: str, content: str):
-    """Retorna la linea formateada de un element dependiendo de qué sea este"""
-    is_dir = os.path.isdir(full_path)
-    color = Fore.RED if is_dir else Fore.GREEN
-    prefix = Back.WHITE if content == cursor_content else ""
-    icon = "📁" if is_dir else "📄"
-    result = f"{prefix}{icon}{color} {content} {Style.RESET_ALL}"
-    line = result + " " * (50 - len(result.removeprefix(prefix)))
-    return line
-
-
-def draw_picker(contents: list[str], cursor_index: int, current_path):
-    """Dibuja la pantalla de navegacion"""
-    clear_screen()
-    cursor_content = contents[cursor_index]
-    print(f"Path actual : {current_path}")
-    # Si hay mas de 25 elementos, los dibuja en dos columnas
-    if len(contents) >= 26:
-        middle_index = len(contents) // 2
-        content_first_half = contents[:middle_index]
-        content_second_half = contents[middle_index + 1 :]
-        for content in zip(content_first_half, content_second_half):
-            line = ""
-            for element in content:
-                full_path = os.path.join(current_path, element)
-                result = get_format_line(full_path, cursor_content, element)
-                line += result
-            print(line)
-        return
-    for element in contents:
-        full_path = os.path.join(current_path, element)
-        line = get_format_line(full_path, cursor_content, element)
-        print(line)
-
-
 def install_libs(libs: list[str]):
     for lib in libs:
-        pip_path = ".venv/scripts/pip" if actual_system == windows else ".venv/bin/pip"
-        result = run_command(f"{pip_path} install {lib}")
+        command = f"{Path.python} -m pip install {lib}"
+        result = run_command(command)
         if result.returncode == 0:
             print_success(f"✅ Librería '{lib}' instalada.")
             sleep(1)
@@ -116,7 +59,7 @@ def main():
     cursor_index: int = 0
     state: int = States.dir_picker
 
-    if actual_system == windows:
+    if actual_os == windows:
         config_policy()
 
     is_running = True
@@ -139,38 +82,39 @@ def main():
             if key in state_changes:
                 state = state_changes[key]
                 continue
+            match key:
+                case readchar.key.UP:
+                    cursor_index = max(cursor_index - 1, 0)
 
-            if key == readchar.key.UP:
-                cursor_index = max(cursor_index - 1, 0)
-            elif key == readchar.key.DOWN:
-                cursor_index = min(cursor_index + 1, len(contents) - 1)
+                case readchar.key.DOWN:
+                    cursor_index = min(cursor_index + 1, len(contents) - 1)
 
-            elif key == readchar.key.ENTER or key == readchar.key.RIGHT:
-                if contents[cursor_index] != "..":
-                    state = States.choise_action
-                    continue
-                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
-                os.chdir(current_path)
-                cursor_index = 0
+                case readchar.key.ENTER | readchar.key.RIGHT:
+                    if contents[cursor_index] != "..":
+                        state = States.choise_action
+                        continue
+                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                    os.chdir(current_path)
+                    cursor_index = 0
 
-            elif key == readchar.key.BACKSPACE or key == readchar.key.LEFT:
-                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
-                os.chdir(current_path)
-                cursor_index = 0
+                case readchar.key.BACKSPACE | readchar.key.LEFT:
+                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                    os.chdir(current_path)
+                    cursor_index = 0
 
-            elif key.lower() == "q":
-                is_running = False
-                exit(0)
+                case "q" | readchar.key.ESC:
+                    is_running = False
+                    exit(0)
 
         elif state == States.venv_creator:
-            print("⚙️ Creando entorno virtual...")
+            title("⚙️ Creando entorno virtual...")
             run_command("python -m venv .venv")
             print_success("✅ Entorno creado.")
             sleep(1)
             state = States.dir_picker
 
         elif state == States.library_installer:
-            print("📦 Instalación de librerías")
+            title("📦 Instalación de librerías")
             if not os.path.exists(".venv"):
                 print_error("⚠️ No existe .venv. Creando...")
                 sleep(1)
@@ -178,19 +122,15 @@ def main():
                 continue
 
             if os.path.exists("requirements.txt"):
-                print("📦 Instalando librerías desde requirements.txt")
+                title("📦 Instalando librerías desde requirements.txt")
                 op = (
                     input("Instalar las librerías desde requirements.txt? (si/no): ")
                     .strip()
                     .lower()
                 )
                 if "si" in op:
-                    pip_path = (
-                        ".venv/scripts/pip"
-                        if actual_system == windows
-                        else ".venv/bin/pip"
-                    )
-                    result = run_command(f"{pip_path} install -r requirements.txt")
+                    command = f"{Path.python} -m pip install -r requirements.txt"
+                    result = run_command(command)
                     if result.returncode == 0:
                         print_success("✅ Librerías instaladas correctamente.")
                     else:
@@ -214,7 +154,7 @@ def main():
 
         elif state == States.create_dir:
             clear_screen()
-            print("📦 Estado: Creación de carpetas")
+            title("📦 Creación de carpetas")
             try:
                 name = input("Nombre de la carpeta: ").strip()
                 os.mkdir(name)
@@ -235,8 +175,9 @@ def main():
                 "Abrir",
                 "Crear entorno",
                 "Instalar libreria en entorno",
-                "Borrar",
                 "Cambiar nombre",
+                "Listar librerias instaladas",
+                "Borrar",
                 "Salir",
             ]
 
@@ -258,29 +199,36 @@ def main():
                 clear_screen()
                 print(line)
                 for index, option in enumerate(options):
-                    if index == option_index:
-                        option = Fore.RED + option + Style.RESET_ALL
-                    print(option)
+                    print(get_option_format(option, (index == option_index)))
 
                 key = readchar.readkey()
-                if key == readchar.key.UP:
-                    option_index = max(option_index - 1, 0)
-                elif key == readchar.key.DOWN:
-                    option_index = min(option_index + 1, len(options) - 1)
+                match key:
+                    case readchar.key.UP:
+                        option_index = max(option_index - 1, 0)
+                    case readchar.key.DOWN:
+                        option_index = min(option_index + 1, len(options) - 1)
+                    case readchar.key.ENTER:
+                        if option_index == 0 or option_index <= 2:
+                            current_path += f"/{actual_element}"
+                            os.chdir(current_path)
+                        if option_index == 3:
+                            new_name = input("Nuevo nombre : ").strip()
+                            os.rename(full_path, new_name)
+                        if option_index == 4:
+                            title("📦 Listando librerias...")
+                            command = f"{actual_element}/{Path.python} -m pip freeze"
+                            result = run_command(command)
+                            if result.returncode == 0:
+                                print(result.stdout)
+                            else:
+                                print_error(f"❌ Error: {result.stderr}")
+                            input("Presioná Enter para continuar...")
+                        if option_index == 5:
+                            rmtree(full_path)
 
-                elif key == readchar.key.ENTER:
-                    if option_index == 0 or option_index <= 2:
-                        current_path += f"/{actual_element}"
-                        os.chdir(current_path)
-                    if option_index == 3:
-                        rmtree(full_path)
-                    if option_index == 4:
-                        new_name = input("Nuevo nombre : ").strip()
-                        os.rename(full_path, new_name)
-
-                    cursor_index = 0
-                    state = states_to_switch[option_index]
-                    break
+                        cursor_index = 0
+                        state = states_to_switch[option_index]
+                        break
 
 
 if __name__ == "__main__":
