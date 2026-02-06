@@ -8,6 +8,8 @@ import globals
 def main():
     global current_path, cursor_index, current_state, contents
     user: str = os.path.expanduser("~")
+    last_path = user
+    last_state = States.dir_picker
     globals.current_path = user
     globals.contents = os.listdir(globals.current_path)
     os.chdir(globals.current_path)
@@ -31,6 +33,10 @@ def main():
 
     while is_running:
         actions[globals.current_state]()
+        if (last_state != globals.current_state) or (globals.current_path != last_path):
+            globals.contents = os.listdir(globals.current_path)
+            last_path = globals.current_path
+            last_state = globals.current_state
 
 
 if __name__ == "__main__":

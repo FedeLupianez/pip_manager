@@ -1,4 +1,3 @@
-from colorama import Fore, Style
 import os
 from rich.console import Console
 from rich.columns import Columns

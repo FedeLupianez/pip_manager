@@ -1,2 +1,8 @@
-colorama==0.4.6
+markdown-it-py==4.0.0
+mdurl==0.1.2
+nuitka==2.7.12
+ordered-set==4.1.0
+pygments==2.19.2
 readchar==4.2.1
+rich==14.3.2
+zstandard==0.24.0

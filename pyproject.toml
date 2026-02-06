@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "colorama>=0.4.6",
+    # "colorama>=0.4.6",
     "nuitka>=2.7.12",
     "readchar>=4.2.1",
     "rich>=14.3.2",
